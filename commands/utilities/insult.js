@@ -5,10 +5,10 @@ export const data = new SlashCommandBuilder()
 	.setDescription('Generate an insult');
 export async function execute(interaction) {
 	const verbs = [
-		'hairy', 'fladcid', 'queef-tastic', 'geriatric', 'pickled', 'cum-guzzling', 'large', 'morbidly obese'
+		'hairy', 'fladcid', 'queef-tastic', 'geriatric', 'pickled', 'cum-guzzling', 'large', 'morbidly obese', 'semen-squirting', 'questionable'
 	];
 	const nouns = [
-		'buford', 'butthole', 'cuntagon', 'chode', 'abortion salad', 'cum-slut', 'donkey rapist'
+		'buford', 'butthole', 'cuntagon', 'chode', 'abortion salad', 'cum-slut', 'donkey rapist', 'turkey tits'
 	];
 
     const randomVerb = verbs[Math.floor(Math.random() * verbs.length)];

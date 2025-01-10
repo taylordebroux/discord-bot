@@ -27,14 +27,11 @@ const commandFolders = fs.readdirSync(foldersPath);
 for (const folder of commandFolders) {
 	const commandsPath = path.join(foldersPath, folder);
 	const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
-	//console.log('Command Path: ' + commandsPath);
-	//console.log('Command files: ' + commandFiles);
+
 	for (const file of commandFiles) {
 		const filePath = path.join(commandsPath, file);
 		const fileUrl = pathToFileURL(filePath).href; // Convert the file path to a file:// URL
 		const command = await import(fileUrl); // Use the file:// URL for dynamic import
-		//console.log('    File Path: ' + filePath);
-		//console.log('    Command: ', command);
 		// Set a new item in the Collection with the key as the command name and the value as the exported module
 		if ('data' in command && 'execute' in command) {
 			client.commands.set(command.data.name, command);
