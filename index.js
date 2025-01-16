@@ -5,6 +5,8 @@ import { fileURLToPath, pathToFileURL } from 'url';
 import { Client, Collection, Events, GatewayIntentBits } from 'discord.js';
 // Import dotent
 import { config } from 'dotenv';
+// import openai
+import { OpenAI } from 'openai';
 
 // these variables are only available by default in commonJS, and need this extra setup to be used in ESM
 const __filename = fileURLToPath(import.meta.url);
@@ -17,7 +19,8 @@ config();
 const token = process.env.DISCORD_TOKEN;
 
 // Create a new client instance
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages,
+	 GatewayIntentBits.GuildMembers, GatewayIntentBits.MessageContent] });
 
 // Slash commands
 client.commands = new Collection();
@@ -78,6 +81,79 @@ for (const file of eventFiles) {
 		client.on(event.name, (...args) => event.execute(...args));
 	}
 }
+
+/*
+///////////////////////////////////////////////////////
+					OPEN AI BOT STUFF
+///////////////////////////////////////////////////////
+*/
+const IGNORE_PREFIX = "!";
+const openai = new OpenAI({
+    apiKey: process.env.OPENAI_KEY,
+})
+
+client.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
+    if (message.content.startsWith(IGNORE_PREFIX)) return;
+    if (!message.mentions.users.has(client.user.id)) return;
+
+    await message.channel.sendTyping();
+
+    const sendTypingInterval = setInterval(() => {
+        message.channel.sendTyping();
+    }, 5000);
+
+    let conversation = [];
+    conversation.push({
+        role: 'system',
+        content: 'My name is squidgy and I am mean annoying chatbot who doesn\'t like providing information.'
+    });
+
+    let prevMessages = await message.channel.messages.fetch({ limit: 10});
+    prevMessages.reverse();
+
+    prevMessages.forEach((msg) => {
+        if (msg.author.bot && msg.author.id !== client.user.id) return;
+        if (msg.content.startsWith(IGNORE_PREFIX)) return;
+
+        const username = msg.author.username.replace(/\s+/g, '_').replace(/[^\w\s]/gi, '');
+
+        if (msg.author.id === client.user.id) {
+            conversation.push({
+                role: 'assistant',
+                name: username,
+                content: msg.content,
+            })
+        }
+
+        conversation.push({
+            role: 'user',
+            name: username,
+            content: msg.content,
+        })
+    })
+    const response = await openai.chat.completions
+        .create({
+            model: 'gpt-3.5-turbo',
+            messages: conversation,
+        }).catch((error) => console.error('OpenAI Error:\n', error));
+
+    clearInterval(sendTypingInterval);
+
+    if (!response) {
+        message.reply("sumpin ain't workin with the OpenAI API right now");
+    }
+
+    const responseMessage = response.choices[0].message.content;
+    const chunkSizeLimit = 2000;
+
+    for (let i=0; i<responseMessage.length; i+=chunkSizeLimit){
+        const chunk = responseMessage.substring(i, i + chunkSizeLimit);
+
+        await message.reply(chunk);
+    }
+
+});
 
 // When the client is ready, run this code (only once).
 // The distinction between `client: Client<boolean>` and `readyClient: Client<true>` is important for TypeScript developers.
