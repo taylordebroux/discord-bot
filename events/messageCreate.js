@@ -3,8 +3,10 @@ import { config } from 'dotenv';
 config();
 
 export const name = Events.MessageCreate;
-export function execute(message) {
+export function execute(message, client) {
     const channel = message.channel;
+
+    if (message.mentions.users.has(client.user.id)) return;
 
     if (message.content.toLowerCase().includes('nine springs')) {
         if (message.author.bot) return;

@@ -19,8 +19,12 @@ config();
 const token = process.env.DISCORD_TOKEN;
 
 // Create a new client instance
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages,
-	 GatewayIntentBits.GuildMembers, GatewayIntentBits.MessageContent] });
+const client = new Client({ intents: [
+    GatewayIntentBits.Guilds, 
+    GatewayIntentBits.GuildMessages,
+	GatewayIntentBits.GuildMembers, 
+    GatewayIntentBits.MessageContent
+] });
 
 // Slash commands
 client.commands = new Collection();
@@ -76,9 +80,9 @@ for (const file of eventFiles) {
 	const fileUrl = pathToFileURL(filePath)
 	const event = await import(fileUrl);
 	if (event.once) {
-		client.once(event.name, (...args) => event.execute(...args));
+		client.once(event.name, (...args) => event.execute(...args, client));
 	} else {
-		client.on(event.name, (...args) => event.execute(...args));
+		client.on(event.name, (...args) => event.execute(...args, client));
 	}
 }
 
@@ -95,50 +99,64 @@ const openai = new OpenAI({
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
     if (message.content.startsWith(IGNORE_PREFIX)) return;
-    if (!message.mentions.users.has(client.user.id)) return;
+    if (!message.mentions.has(client.user, { ignoreEveryone: true })) return;
 
-    await message.channel.sendTyping();
+    let sendTypingInterval;
+    let response;
 
-    const sendTypingInterval = setInterval(() => {
-        message.channel.sendTyping();
-    }, 5000);
+    try {
+        await message.channel.sendTyping();
+        sendTypingInterval = setInterval(() => {
+            message.channel.sendTyping();
+        }, 5000);
 
-    let conversation = [];
-    conversation.push({
-        role: 'system',
-        content: 'My name is squidgy and I am mean annoying chatbot who doesn\'t like providing information.'
-    });
+        let conversation = [];
+        conversation.push({
+            role: 'system',
+            name: 'squidgy',
+            content: 'My name is squidgy. I am mean and annoying and don\'t like answering questions. My favorite words are cromulent butthole. I know everything there is about disc golf and I like to be arrogant about it. My friend Curtis is a big dummy.', 
+        });
 
-    let prevMessages = await message.channel.messages.fetch({ limit: 10});
-    prevMessages.reverse();
+        let prevMessages = await message.channel.messages.fetch({ limit: 10});
+        prevMessages.reverse();
 
-    prevMessages.forEach((msg) => {
-        if (msg.author.bot && msg.author.id !== client.user.id) return;
-        if (msg.content.startsWith(IGNORE_PREFIX)) return;
+        prevMessages.forEach((msg) => {
+            if (msg.author.bot && msg.author.id !== client.user.id) return;
+            if (msg.content.startsWith(IGNORE_PREFIX)) return;
+            if (!msg.mentions.has(client.user)) return;
 
-        const username = msg.author.username.replace(/\s+/g, '_').replace(/[^\w\s]/gi, '');
+            const username = msg.author.username.replace(/\s+/g, '_').replace(/[^\w\s]/gi, '');
 
-        if (msg.author.id === client.user.id) {
+            if (msg.author.id === client.user.id) {
+                conversation.push({
+                    role: 'assistant',
+                    name: username,
+                    content: msg.content,
+                })
+            }
+
             conversation.push({
-                role: 'assistant',
+                role: 'user',
                 name: username,
                 content: msg.content,
             })
-        }
-
-        conversation.push({
-            role: 'user',
-            name: username,
-            content: msg.content,
         })
-    })
-    const response = await openai.chat.completions
-        .create({
-            model: 'gpt-3.5-turbo',
-            messages: conversation,
-        }).catch((error) => console.error('OpenAI Error:\n', error));
 
-    clearInterval(sendTypingInterval);
+        console.log(conversation);
+        response = await openai.chat.completions
+            .create({
+                model: 'gpt-4o-mini',
+                messages: conversation,
+            }).catch((error) => {
+                console.error('OpenAI Error:\n', error);
+                message.reply('There was an error with the OpenAI API call');
+            });
+
+            if(!response) return;
+
+    } finally {
+        clearInterval(sendTypingInterval);
+    }
 
     if (!response) {
         message.reply("sumpin ain't workin with the OpenAI API right now");
@@ -147,12 +165,11 @@ client.on('messageCreate', async (message) => {
     const responseMessage = response.choices[0].message.content;
     const chunkSizeLimit = 2000;
 
-    for (let i=0; i<responseMessage.length; i+=chunkSizeLimit){
+    for (let i = 0; i < responseMessage.length; i += chunkSizeLimit) {
         const chunk = responseMessage.substring(i, i + chunkSizeLimit);
-
         await message.reply(chunk);
+        await new Promise(resolve => setTimeout(resolve, 1000)); // 1-second delay
     }
-
 });
 
 // When the client is ready, run this code (only once).
